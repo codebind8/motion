@@ -14,7 +14,6 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    // Manually read + parse body (Vite projects don't auto-parse)
     let body: any = req.body;
 
     if (!body || typeof body === "string") {
@@ -38,7 +37,6 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ error: "No frames received" });
     }
 
-    // Use only the first frame to keep payload small
     const imageData = frames[0];
     const base64 = imageData.includes(",") ? imageData.split(",")[1] : imageData;
     const dataUrl = `data:image/jpeg;base64,${base64}`;
@@ -57,10 +55,14 @@ Analyze these animation frames and return JSON describing:
 }
 IMPORTANT: Return ONLY raw JSON. No markdown, no code fences, no explanation.`;
 
+    // "openrouter/free" auto-selects any available free model that supports vision
+    // Fallback to specific known-good free vision models
     const models = [
-      "google/gemini-2.0-flash-thinking-exp:free",
+      "openrouter/free",
+      "qwen/qwen2.5-vl-72b-instruct:free",
+      "qwen/qwen2.5-vl-32b-instruct:free",
       "meta-llama/llama-3.2-11b-vision-instruct:free",
-      "qwen/qwen2-vl-7b-instruct:free",
+      "google/gemma-3-27b-it:free",
     ];
 
     let responseText: string | null = null;
@@ -113,6 +115,8 @@ IMPORTANT: Return ONLY raw JSON. No markdown, no code fences, no explanation.`;
       console.error("All models failed:", errors);
       return res.status(500).json({ error: "All models failed", details: errors });
     }
+
+    console.log("Response preview:", responseText.slice(0, 200));
 
     const cleaned = responseText
       .replace(/```json\s*/gi, "")
