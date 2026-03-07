@@ -1,7 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export default async function handler(req: any, res: any) {
-  // Enable CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -14,25 +13,19 @@ export default async function handler(req: any, res: any) {
   const apiKey = process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
-    console.error("GEMINI_API_KEY environment variable is not set");
-    return res.status(500).json({
-      error: "GEMINI_API_KEY is not configured in Vercel environment variables",
-    });
+    console.error("GEMINI_API_KEY is not set");
+    return res.status(500).json({ error: "GEMINI_API_KEY is not configured" });
   }
 
   try {
-    // Parse body manually if needed (for Vite/Vercel non-Next.js projects)
     let body = req.body;
     if (typeof body === "string") {
-      try {
-        body = JSON.parse(body);
-      } catch {
+      try { body = JSON.parse(body); } catch {
         return res.status(400).json({ error: "Invalid JSON body" });
       }
     }
 
     const frames: string[] = body?.frames;
-
     console.log("Frames received:", frames?.length);
 
     if (!frames || frames.length === 0) {
@@ -63,16 +56,16 @@ IMPORTANT: Return ONLY raw JSON. No markdown, no code fences, no explanation.`;
       { inlineData: { mimeType: "image/jpeg", data: base64 } },
     ];
 
-    // Try models in order until one works
+    // Updated model list — correct names as of 2025
     const modelNames = [
       "gemini-2.0-flash",
       "gemini-2.0-flash-lite",
-      "gemini-1.5-flash-latest",
-      "gemini-pro-vision",
+      "gemini-1.5-flash",
+      "gemini-1.5-pro",
     ];
 
     let result: any = null;
-    let lastError: any = null;
+    const errors: string[] = [];
 
     for (const modelName of modelNames) {
       try {
@@ -84,23 +77,25 @@ IMPORTANT: Return ONLY raw JSON. No markdown, no code fences, no explanation.`;
         console.log("Success with model:", modelName);
         break;
       } catch (e: any) {
-        console.error("Model failed:", modelName, e?.message);
-        lastError = e;
+        const msg = e?.message ?? "unknown";
+        console.error(`Model ${modelName} failed: ${msg}`);
+        errors.push(`${modelName}: ${msg}`);
       }
     }
 
     if (!result) {
-      throw lastError ?? new Error("All models failed");
+      // Log all failures so we can diagnose
+      console.error("All models failed:", JSON.stringify(errors));
+      return res.status(500).json({
+        error: "All Gemini models failed",
+        details: errors,
+      });
     }
 
     const text = result.response.text();
-    console.log("Gemini raw response preview:", text.slice(0, 200));
+    console.log("Response preview:", text.slice(0, 200));
 
-    const cleaned = text
-      .replace(/```json\s*/gi, "")
-      .replace(/```\s*/gi, "")
-      .trim();
-
+    const cleaned = text.replace(/```json\s*/gi, "").replace(/```\s*/gi, "").trim();
     const start = cleaned.indexOf("{");
     const end = cleaned.lastIndexOf("}");
 
