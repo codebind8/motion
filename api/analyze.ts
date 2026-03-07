@@ -15,18 +15,17 @@ export default async function handler(req, res) {
 
     if (!process.env.GEMINI_API_KEY) {
       return res.status(500).json({
-        error: "Gemini API key missing on server",
+        error: "Gemini API key missing",
       });
     }
 
     if (!frames || frames.length === 0) {
       return res.status(400).json({
-        error: "No frames received from client",
+        error: "No frames received",
       });
     }
 
-    // Limit frames (Vercel payload safety)
-    const limitedFrames = frames.slice(0, 3);
+    const limitedFrames = frames.slice(0, 2);
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
@@ -37,14 +36,13 @@ export default async function handler(req, res) {
     const prompt = `
 You are an expert UI animation engineer.
 
-Analyze these animation frames and return JSON with:
+Analyze the animation frames and return JSON describing:
 - animation summary
 - initial state
 - mid motion
 - final state
 - animation properties
 - step-by-step explanation
-- tracked UI elements
 - CSS animation code
 - Framer Motion code
 - GSAP animation code
@@ -58,7 +56,6 @@ Return ONLY valid JSON.
           role: "user",
           parts: [
             { text: prompt },
-
             ...limitedFrames.map((frame) => ({
               inlineData: {
                 mimeType: "image/jpeg",
@@ -71,8 +68,6 @@ Return ONLY valid JSON.
     });
 
     const text = result.response.text();
-
-    console.log("Gemini response:", text);
 
     const jsonMatch = text.match(/\{[\s\S]*\}/);
 
