@@ -24,7 +24,8 @@ export default async function handler(req, res) {
       });
     }
 
-    const limitedFrames = frames.slice(0, 3);
+    // 🔥 IMPORTANT: reduce payload size
+    const limitedFrames = frames.slice(0, 1);
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
@@ -35,46 +36,56 @@ export default async function handler(req, res) {
     const prompt = `
 You are an expert UI animation engineer.
 
-Analyze these frames and return JSON describing:
-- animation summary
-- initial state
-- mid motion
-- final state
-- animation properties
-- step by step explanation
-- CSS animation
-- Framer Motion code
-- GSAP code
+Analyze these animation frames and return JSON describing:
 
-Return ONLY valid JSON.
+{
+ "summary": "...",
+ "initialState": "...",
+ "midMotion": "...",
+ "finalState": "...",
+ "properties": [],
+ "cssCode": "",
+ "framerMotionCode": "",
+ "gsapCode": ""
+}
+
+Return ONLY JSON.
 `;
+
+    const parts = [
+      { text: prompt },
+      ...limitedFrames.map((frame) => ({
+        inlineData: {
+          mimeType: "image/jpeg",
+          data: frame.split(",")[1],
+        },
+      })),
+    ];
 
     const result = await model.generateContent({
       contents: [
         {
           role: "user",
-          parts: [
-            { text: prompt },
-            ...limitedFrames.map((frame) => ({
-              inlineData: {
-                mimeType: "image/jpeg",
-                data: frame.split(",")[1],
-              },
-            })),
-          ],
-        },
-      ],
+          parts
+        }
+      ]
     });
 
     const text = result.response.text();
 
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    console.log("Gemini raw response:", text);
 
-    if (!jsonMatch) {
-      throw new Error("Gemini returned invalid JSON");
+    // safer JSON extraction
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+
+    if (start === -1 || end === -1) {
+      throw new Error("Gemini did not return JSON");
     }
 
-    const parsed = JSON.parse(jsonMatch[0]);
+    const json = text.slice(start, end + 1);
+
+    const parsed = JSON.parse(json);
 
     return res.status(200).json(parsed);
 
@@ -84,7 +95,9 @@ Return ONLY valid JSON.
 
     return res.status(500).json({
       error: "Gemini request failed",
-      details: error.message,
+      details: error.message || "Unknown error"
     });
+
   }
+
 }
