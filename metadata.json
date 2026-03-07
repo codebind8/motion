@@ -1,0 +1,5 @@
+{
+  "name": "MotionReverse AI",
+  "description": "Analyze UI animations from videos and generate reusable CSS, Framer Motion, and GSAP code.",
+  "requestFramePermissions": []
+}
