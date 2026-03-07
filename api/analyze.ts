@@ -8,21 +8,9 @@ export default async function handler(req, res) {
 
   try {
 
-    const { frames } = req.body;import { GoogleGenerativeAI } from "@google/generative-ai";
-
-export default async function handler(req, res) {
-
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
-
-  try {
-
     const { frames } = req.body;
 
     console.log("Frames received:", frames?.length);
-
-    // 🔍 Check if API key exists (safe logging)
     console.log("Gemini API key exists:", !!process.env.GEMINI_API_KEY);
 
     if (!process.env.GEMINI_API_KEY) {
@@ -37,8 +25,8 @@ export default async function handler(req, res) {
       });
     }
 
-    // Limit frames to avoid Vercel payload limits
-    const limitedFrames = frames.slice(0, 5);
+    // Limit frames (Vercel payload safety)
+    const limitedFrames = frames.slice(0, 3);
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
@@ -49,19 +37,17 @@ export default async function handler(req, res) {
     const prompt = `
 You are an expert UI animation engineer.
 
-I provided several frames from a UI animation video.
-
-Analyze them and return structured JSON containing:
-
-1. Animation summary
-2. Initial state
-3. Mid motion
-4. Final state
-5. Animation properties
-6. Step-by-step explanation
-7. Tracked UI elements
-8. Animation code (CSS / Framer Motion / GSAP)
-9. AI prompts for recreating the animation
+Analyze these animation frames and return JSON with:
+- animation summary
+- initial state
+- mid motion
+- final state
+- animation properties
+- step-by-step explanation
+- tracked UI elements
+- CSS animation code
+- Framer Motion code
+- GSAP animation code
 
 Return ONLY valid JSON.
 `;
@@ -88,99 +74,10 @@ Return ONLY valid JSON.
 
     console.log("Gemini response:", text);
 
-    // Extract JSON safely
     const jsonMatch = text.match(/\{[\s\S]*\}/);
 
     if (!jsonMatch) {
-      throw new Error("Gemini did not return valid JSON");
-    }
-
-    const parsed = JSON.parse(jsonMatch[0]);
-
-    res.status(200).json(parsed);
-
-  } catch (error) {
-
-    console.error("Gemini error:", error);
-
-    res.status(500).json({
-      error: "Gemini request failed",
-      details: error.message,
-    });
-  }
-}
-
-    console.log("Frames received:", frames?.length);
-
-    if (!frames || frames.length === 0) {
-      return res.status(400).json({
-        error: "No frames received from client",
-      });
-    }
-
-    // Limit frames to avoid Vercel payload limits
-    const limitedFrames = frames.slice(0, 5);
-
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash",
-    });
-
-    const prompt = `
-You are an expert UI animation engineer.
-
-I provided several frames from a UI animation video.
-
-Analyze them and return structured JSON containing:
-
-1. Animation summary
-2. Initial state
-3. Mid motion
-4. Final state
-5. Animation properties (translate, scale, opacity etc.)
-6. Step-by-step explanation
-7. Tracked UI elements and their motion
-8. Production ready animation code:
-   - CSS keyframes
-   - Framer Motion React component
-   - GSAP animation
-9. AI prompts to recreate the animation for:
-   - ChatGPT
-   - Gemini
-   - Framer AI
-   - Generic AI
-
-Return ONLY valid JSON.
-`;
-
-    const result = await model.generateContent({
-      contents: [
-        {
-          role: "user",
-          parts: [
-            { text: prompt },
-
-            ...limitedFrames.map((frame) => ({
-              inlineData: {
-                mimeType: "image/jpeg",
-                data: frame.split(",")[1],
-              },
-            })),
-          ],
-        },
-      ],
-    });
-
-    const text = result.response.text();
-
-    console.log("Gemini response:", text);
-
-    // Extract JSON safely
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-
-    if (!jsonMatch) {
-      throw new Error("Gemini did not return valid JSON");
+      throw new Error("Gemini returned invalid JSON");
     }
 
     const parsed = JSON.parse(jsonMatch[0]);
