@@ -37,18 +37,25 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ error: "No frames received" });
     }
 
-    // Send all 10 frames for maximum accuracy
-    const frameImages = frames.slice(0, 10).map((imageData: string) => {
+    // Pick 3 key frames: start, middle, end — best coverage without timeout
+    const keyFrameIndices = [
+      0,
+      Math.floor((frames.length - 1) / 2),
+      frames.length - 1,
+    ];
+    const keyFrames = keyFrameIndices.map((i) => frames[i]);
+
+    const frameImages = keyFrames.map((imageData: string) => {
       const base64 = imageData.includes(",") ? imageData.split(",")[1] : imageData;
       return {
         type: "image_url",
-        image_url: { url: `data:image/jpeg;base64,${base64}` }
+        image_url: { url: `data:image/jpeg;base64,${base64}` },
       };
     });
 
-    console.log("Sending frames to model:", frameImages.length);
+    console.log("Sending key frames:", frameImages.length, "of", frames.length);
 
-    const prompt = `You are an expert UI animation engineer. I am giving you ${frameImages.length} sequential frames from an animation recording, ordered from start to finish. Analyze the full motion sequence and return ONLY a raw JSON object with this exact structure (no markdown, no code fences):
+    const prompt = `You are an expert UI animation engineer. I am giving you 3 key frames from an animation: the START frame, the MID frame, and the END frame. Analyze the motion between them and return ONLY a raw JSON object with this exact structure (no markdown, no code fences):
 
 {
   "summary": "Brief description of the overall animation",
