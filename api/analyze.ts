@@ -19,43 +19,39 @@ export default async function handler(req, res) {
     const prompt = `
 You are an expert UI animation engineer.
 
-I provided several frames from a UI animation video.
-
-Analyze them and return structured JSON containing:
-
-1. Animation summary
-2. Initial state
-3. Mid motion
-4. Final state
-5. Animation properties (translate, scale, opacity etc.)
-6. Step-by-step explanation
-7. Tracked UI elements and their motion
-8. Production ready animation code:
-   - CSS keyframes
-   - Framer Motion React component
-   - GSAP animation
-9. AI prompts to recreate the animation for:
-   - ChatGPT
-   - Gemini
-   - Framer AI
-   - Generic AI
+Analyze the animation frames and return structured JSON describing the animation.
 
 Return ONLY JSON.
 `;
 
-    const result = await model.generateContent([
-      prompt,
-      ...frames.map((frame: string) => ({
-        inlineData: {
-          mimeType: "image/jpeg",
-          data: frame.split(",")[1],
+    const limitedFrames = frames.slice(0, 5);
+
+    const result = await model.generateContent({
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { text: prompt },
+            ...limitedFrames.map((frame) => ({
+              inlineData: {
+                mimeType: "image/jpeg",
+                data: frame.split(",")[1],
+              },
+            })),
+          ],
         },
-      })),
-    ]);
+      ],
+    });
 
     const text = result.response.text();
 
-    const parsed = JSON.parse(text);
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+
+    if (!jsonMatch) {
+      throw new Error("Invalid JSON response from Gemini");
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]);
 
     res.status(200).json(parsed);
 
