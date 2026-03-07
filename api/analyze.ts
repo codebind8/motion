@@ -41,28 +41,53 @@ export default async function handler(req: any, res: any) {
     const base64 = imageData.includes(",") ? imageData.split(",")[1] : imageData;
     const dataUrl = `data:image/jpeg;base64,${base64}`;
 
-    const prompt = `You are an expert UI animation engineer.
-Analyze these animation frames and return JSON describing:
-{
-  "summary": "...",
-  "initialState": "...",
-  "midMotion": "...",
-  "finalState": "...",
-  "properties": [],
-  "cssCode": "",
-  "framerMotionCode": "",
-  "gsapCode": ""
-}
-IMPORTANT: Return ONLY raw JSON. No markdown, no code fences, no explanation.`;
+    const prompt = `You are an expert UI animation engineer. Analyze these animation frames and return ONLY a raw JSON object with this exact structure (no markdown, no code fences):
 
-    // "openrouter/free" auto-selects any available free model that supports vision
-    // Fallback to specific known-good free vision models
+{
+  "summary": "Brief description of the overall animation",
+  "initialState": "Description of the element at start",
+  "midMotion": "Description during animation",
+  "finalState": "Description at the end",
+  "properties": ["property1", "property2"],
+  "trackedElements": [
+    {
+      "name": "Element name",
+      "properties": ["opacity", "transform"],
+      "motionPath": "Description of how this element moves"
+    }
+  ],
+  "stepByStep": [
+    "Step 1 description",
+    "Step 2 description"
+  ],
+  "cssCode": "/* CSS keyframe animation code */",
+  "framerMotionCode": "// Framer Motion React code",
+  "gsapCode": "// GSAP animation code",
+  "aiPrompts": {
+    "chatgpt": {
+      "concise": "Short ChatGPT prompt",
+      "detailed": "Detailed ChatGPT prompt"
+    },
+    "gemini": {
+      "concise": "Short Gemini prompt",
+      "detailed": "Detailed Gemini prompt"
+    },
+    "framer": {
+      "concise": "Short Framer AI prompt",
+      "detailed": "Detailed Framer AI prompt"
+    },
+    "generic": {
+      "concise": "Short generic prompt",
+      "detailed": "Detailed generic prompt"
+    }
+  }
+}`;
+
     const models = [
       "openrouter/free",
       "qwen/qwen2.5-vl-72b-instruct:free",
       "qwen/qwen2.5-vl-32b-instruct:free",
       "meta-llama/llama-3.2-11b-vision-instruct:free",
-      "google/gemma-3-27b-it:free",
     ];
 
     let responseText: string | null = null;
@@ -115,8 +140,6 @@ IMPORTANT: Return ONLY raw JSON. No markdown, no code fences, no explanation.`;
       console.error("All models failed:", errors);
       return res.status(500).json({ error: "All models failed", details: errors });
     }
-
-    console.log("Response preview:", responseText.slice(0, 200));
 
     const cleaned = responseText
       .replace(/```json\s*/gi, "")
