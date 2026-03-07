@@ -19,7 +19,7 @@ export default async function handler(req: any, res: any) {
     console.log("Frames received:", frames?.length);
 
     if (!process.env.GEMINI_API_KEY) {
-      console.error("❌ GEMINI_API_KEY is not set");
+      console.error("GEMINI_API_KEY is not set");
       return res.status(500).json({
         error: "Gemini API key missing — set GEMINI_API_KEY in Vercel environment variables",
       });
@@ -30,16 +30,9 @@ export default async function handler(req: any, res: any) {
     }
 
     const limitedFrames = frames.slice(0, 1);
-
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-    // ✅ Fix: use stable model name
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash-lite",
-    });
-
-    const prompt = `
-You are an expert UI animation engineer.
+    const prompt = `You are an expert UI animation engineer.
 Analyze these animation frames and return JSON describing:
 {
   "summary": "...",
@@ -51,8 +44,15 @@ Analyze these animation frames and return JSON describing:
   "framerMotionCode": "",
   "gsapCode": ""
 }
-IMPORTANT: Return ONLY raw JSON. No markdown, no code fences, no explanation.
-`;
+IMPORTANT: Return ONLY raw JSON. No markdown, no code fences, no explanation.`;
+
+    // Try models in order — whichever works first wins
+    const modelNames = [
+      "gemini-2.0-flash",
+      "gemini-2.0-flash-lite",
+      "gemini-1.5-flash-latest",
+      "gemini-pro-vision",
+    ];
 
     const parts = [
       { text: prompt },
@@ -64,14 +64,29 @@ IMPORTANT: Return ONLY raw JSON. No markdown, no code fences, no explanation.
       })),
     ];
 
-    const result = await model.generateContent({
-      contents: [{ role: "user", parts }],
-    });
+    let result: any = null;
+    let lastError: any = null;
+
+    for (const modelName of modelNames) {
+      try {
+        const model = genAI.getGenerativeModel({ model: modelName });
+        result = await model.generateContent({
+          contents: [{ role: "user", parts }],
+        });
+        console.log("Model worked: " + modelName);
+        break;
+      } catch (e: any) {
+        console.warn("Model " + modelName + " failed: " + e?.message);
+        lastError = e;
+      }
+    }
+
+    if (!result) throw lastError;
 
     const text = result.response.text();
     console.log("Gemini raw response:", text);
 
-    // ✅ Fix: strip markdown code fences if present
+    // Strip markdown code fences if present
     const cleaned = text
       .replace(/```json\s*/gi, "")
       .replace(/```\s*/gi, "")
@@ -81,7 +96,7 @@ IMPORTANT: Return ONLY raw JSON. No markdown, no code fences, no explanation.
     const end = cleaned.lastIndexOf("}");
 
     if (start === -1 || end === -1) {
-      console.error("❌ Gemini response was not JSON:", text);
+      console.error("Gemini response was not JSON:", text);
       throw new Error("Gemini did not return valid JSON");
     }
 
@@ -90,7 +105,7 @@ IMPORTANT: Return ONLY raw JSON. No markdown, no code fences, no explanation.
 
     return res.status(200).json(parsed);
   } catch (error: any) {
-    console.error("❌ Gemini error:", error);
+    console.error("Gemini error:", error);
     return res.status(500).json({
       error: "Gemini request failed",
       details: error?.message || "Unknown error",
