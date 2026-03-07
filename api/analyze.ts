@@ -12,7 +12,7 @@ export default async function handler(req, res) {
 
     const prompt = `
 You are an expert UI animation engineer.
-Analyze the animation frames and return JSON.
+Analyze the animation frames and return structured JSON explaining the animation.
 `;
 
     const result = await model.generateContent([
@@ -28,6 +28,7 @@ Analyze the animation frames and return JSON.
     const text = result.response.text();
 
     res.status(200).json(JSON.parse(text));
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Gemini request failed" });
