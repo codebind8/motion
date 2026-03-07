@@ -67,17 +67,13 @@ export default function App() {
     setIsProcessing(true);
     setError(null);
     try {
-      // 1. Check if API key is selected (for paid models or if 404 occurred)
       if (window.aistudio && !(await window.aistudio.hasSelectedApiKey())) {
         await window.aistudio.openSelectKey();
-        // Proceeding after openSelectKey as per instructions (assume success)
       }
 
-      // 2. Extract 10 frames
       const extractedFrames = await extractFrames(videoFile, 10);
       setFrames(extractedFrames);
 
-      // 3. Analyze with Gemini
       const result = await analyzeAnimationFrames(extractedFrames);
       setAnalysis(result);
     } catch (err: any) {
@@ -108,6 +104,18 @@ export default function App() {
     if (index === 0) return "Frame 1 (Start)";
     if (index === 9) return "Frame 10 (End)";
     return `Frame ${index + 1}`;
+  };
+
+  // Safe accessors — prevent crashes if API returns partial data
+  const trackedElements = analysis?.trackedElements ?? [];
+  const stepByStep = analysis?.stepByStep ?? [];
+  const properties = analysis?.properties ?? [];
+  const getPrompt = (tab: string, len: string) => {
+    try {
+      return (analysis?.aiPrompts as any)?.[tab]?.[len] ?? 'No prompt available.';
+    } catch {
+      return 'No prompt available.';
+    }
   };
 
   return (
@@ -141,7 +149,7 @@ export default function App() {
       <main className="max-w-7xl mx-auto px-6 py-10">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           
-          {/* Left Column: Upload & Video & Timeline */}
+          {/* Left Column */}
           <div className="lg:col-span-6 space-y-8">
             <section className="space-y-4">
               <div className="flex items-center justify-between">
@@ -213,7 +221,6 @@ export default function App() {
               )}
             </section>
 
-            {/* Horizontal Frame Timeline */}
             <AnimatePresence>
               {frames.length > 0 && (
                 <motion.section 
@@ -252,7 +259,7 @@ export default function App() {
             </AnimatePresence>
           </div>
 
-          {/* Right Column: Analysis & Code */}
+          {/* Right Column */}
           <div className="lg:col-span-6 space-y-8">
             {!analysis && !isProcessing && !error && (
               <div className="h-full flex flex-col items-center justify-center text-center p-12 border border-zinc-800/50 rounded-3xl bg-zinc-900/10 border-dashed">
@@ -297,15 +304,12 @@ export default function App() {
                   animate={{ opacity: 1, x: 0 }}
                   className="space-y-8"
                 >
-                  {/* Animation Analysis Panel */}
                   <section className="p-8 border border-zinc-800 rounded-3xl bg-zinc-900/30 backdrop-blur-sm space-y-8">
                     <div>
                       <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-widest flex items-center gap-2 mb-4">
                         <Info size={14} /> Animation Summary
                       </h2>
-                      <p className="text-lg text-zinc-200 leading-relaxed">
-                        {analysis.summary}
-                      </p>
+                      <p className="text-lg text-zinc-200 leading-relaxed">{analysis.summary}</p>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -323,54 +327,55 @@ export default function App() {
                       </div>
                     </div>
 
-                    <div>
-                      <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3">Animation Properties</h3>
-                      <div className="flex flex-wrap gap-2">
-                        {analysis.properties.map((prop, i) => (
-                          <span 
-                            key={i}
-                            className="px-3 py-1 bg-emerald-500/10 text-emerald-500 rounded-full text-xs font-medium border border-emerald-500/20"
-                          >
-                            {prop}
-                          </span>
-                        ))}
+                    {properties.length > 0 && (
+                      <div>
+                        <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3">Animation Properties</h3>
+                        <div className="flex flex-wrap gap-2">
+                          {properties.map((prop, i) => (
+                            <span key={i} className="px-3 py-1 bg-emerald-500/10 text-emerald-500 rounded-full text-xs font-medium border border-emerald-500/20">
+                              {prop}
+                            </span>
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    )}
 
-                    <div>
-                      <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3">Tracked UI Elements</h3>
-                      <div className="grid grid-cols-1 gap-4">
-                        {analysis.trackedElements.map((element, i) => (
-                          <div key={i} className="p-4 bg-zinc-950/50 rounded-2xl border border-zinc-800/50 space-y-2">
-                            <div className="flex items-center justify-between">
-                              <h4 className="text-sm font-bold text-emerald-500">{element.name}</h4>
-                              <div className="flex gap-1">
-                                {element.properties.map((prop, j) => (
-                                  <span key={j} className="text-[9px] px-1.5 py-0.5 bg-zinc-800 text-zinc-400 rounded border border-zinc-700">
-                                    {prop}
-                                  </span>
-                                ))}
+                    {trackedElements.length > 0 && (
+                      <div>
+                        <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3">Tracked UI Elements</h3>
+                        <div className="grid grid-cols-1 gap-4">
+                          {trackedElements.map((element: any, i: number) => (
+                            <div key={i} className="p-4 bg-zinc-950/50 rounded-2xl border border-zinc-800/50 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <h4 className="text-sm font-bold text-emerald-500">{element.name}</h4>
+                                <div className="flex gap-1">
+                                  {(element.properties ?? []).map((prop: string, j: number) => (
+                                    <span key={j} className="text-[9px] px-1.5 py-0.5 bg-zinc-800 text-zinc-400 rounded border border-zinc-700">
+                                      {prop}
+                                    </span>
+                                  ))}
+                                </div>
                               </div>
+                              <p className="text-xs text-zinc-400 leading-relaxed italic">"{element.motionPath}"</p>
                             </div>
-                            <p className="text-xs text-zinc-400 leading-relaxed italic">
-                              "{element.motionPath}"
-                            </p>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    )}
 
-                    <div>
-                      <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3">Step-by-Step Explanation</h3>
-                      <div className="space-y-3">
-                        {analysis.stepByStep.map((step, i) => (
-                          <div key={i} className="flex gap-3 text-sm text-zinc-400">
-                            <span className="text-emerald-500 font-bold">{i + 1}.</span>
-                            <p>{step}</p>
-                          </div>
-                        ))}
+                    {stepByStep.length > 0 && (
+                      <div>
+                        <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3">Step-by-Step Explanation</h3>
+                        <div className="space-y-3">
+                          {stepByStep.map((step: string, i: number) => (
+                            <div key={i} className="flex gap-3 text-sm text-zinc-400">
+                              <span className="text-emerald-500 font-bold">{i + 1}.</span>
+                              <p>{step}</p>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </section>
 
                   {/* Code Generation Tabs */}
@@ -386,9 +391,7 @@ export default function App() {
                             onClick={() => setActiveTab(tab)}
                             className={cn(
                               "px-4 py-1.5 rounded-md text-xs font-bold transition-all uppercase tracking-wider",
-                              activeTab === tab 
-                                ? "bg-emerald-500 text-black shadow-lg" 
-                                : "text-zinc-500 hover:text-zinc-300"
+                              activeTab === tab ? "bg-emerald-500 text-black shadow-lg" : "text-zinc-500 hover:text-zinc-300"
                             )}
                           >
                             {tab}
@@ -397,100 +400,75 @@ export default function App() {
                       </div>
                     </div>
 
-                    <motion.div
-                      key={activeTab}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.2 }}
-                    >
-                      {activeTab === 'framer' && (
-                        <CodeBlock 
-                          code={analysis.framerMotionCode} 
-                          language="Framer Motion" 
-                        />
-                      )}
-                      {activeTab === 'css' && (
-                        <CodeBlock 
-                          code={analysis.cssCode} 
-                          language="CSS Keyframes" 
-                        />
-                      )}
-                      {activeTab === 'gsap' && (
-                        <CodeBlock 
-                          code={analysis.gsapCode} 
-                          language="GSAP" 
-                        />
-                      )}
+                    <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
+                      {activeTab === 'framer' && <CodeBlock code={analysis.framerMotionCode ?? ''} language="Framer Motion" />}
+                      {activeTab === 'css' && <CodeBlock code={analysis.cssCode ?? ''} language="CSS Keyframes" />}
+                      {activeTab === 'gsap' && <CodeBlock code={analysis.gsapCode ?? ''} language="GSAP" />}
                     </motion.div>
                   </section>
 
                   {/* AI Prompt Generator */}
-                  <section className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
-                          <Sparkles size={14} /> AI Prompt Generator
-                        </h2>
-                        <p className="text-[10px] text-zinc-500 mt-1">Generate a ready-to-use prompt to recreate this animation using other AI tools.</p>
-                      </div>
-                      <div className="flex p-1 bg-zinc-900 rounded-lg border border-zinc-800">
-                        {(['concise', 'detailed'] as const).map((len) => (
-                          <button
-                            key={len}
-                            onClick={() => setPromptLength(len)}
-                            className={cn(
-                              "px-3 py-1 rounded-md text-[10px] font-bold transition-all uppercase tracking-wider",
-                              promptLength === len 
-                                ? "bg-zinc-700 text-zinc-100" 
-                                : "text-zinc-500 hover:text-zinc-300"
-                            )}
-                          >
-                            {len}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="p-6 border border-zinc-800 rounded-3xl bg-zinc-900/30 backdrop-blur-sm space-y-6">
-                      <div className="flex p-1 bg-zinc-950 rounded-xl border border-zinc-800 w-full">
-                        {(['chatgpt', 'gemini', 'framer', 'generic'] as const).map((tab) => (
-                          <button
-                            key={tab}
-                            onClick={() => setActivePromptTab(tab)}
-                            className={cn(
-                              "flex-1 px-4 py-2 rounded-lg text-xs font-bold transition-all capitalize tracking-wide",
-                              activePromptTab === tab 
-                                ? "bg-emerald-500 text-black shadow-lg" 
-                                : "text-zinc-500 hover:text-zinc-300"
-                            )}
-                          >
-                            {tab === 'chatgpt' ? 'ChatGPT' : tab === 'gemini' ? 'Gemini' : tab === 'framer' ? 'Framer AI' : 'Generic'}
-                          </button>
-                        ))}
-                      </div>
-
-                      <motion.div
-                        key={`${activePromptTab}-${promptLength}`}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="space-y-4"
-                      >
-                        <div className="flex items-center justify-between px-2">
-                          <span className="text-[10px] text-zinc-500 font-medium italic">
-                            {activePromptTab === 'chatgpt' && "Optimized for React and Framer Motion logic."}
-                            {activePromptTab === 'gemini' && "Focuses on technical properties and spatial reasoning."}
-                            {activePromptTab === 'framer' && "Tailored for Framer components and layout engine."}
-                            {activePromptTab === 'generic' && "A tool-agnostic description of the motion and logic."}
-                          </span>
+                  {analysis.aiPrompts && (
+                    <section className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+                            <Sparkles size={14} /> AI Prompt Generator
+                          </h2>
+                          <p className="text-[10px] text-zinc-500 mt-1">Generate a ready-to-use prompt to recreate this animation using other AI tools.</p>
                         </div>
-                        <CodeBlock 
-                          code={analysis.aiPrompts[activePromptTab][promptLength]} 
-                          language="AI Prompt" 
-                        />
-                      </motion.div>
-                    </div>
-                  </section>
+                        <div className="flex p-1 bg-zinc-900 rounded-lg border border-zinc-800">
+                          {(['concise', 'detailed'] as const).map((len) => (
+                            <button
+                              key={len}
+                              onClick={() => setPromptLength(len)}
+                              className={cn(
+                                "px-3 py-1 rounded-md text-[10px] font-bold transition-all uppercase tracking-wider",
+                                promptLength === len ? "bg-zinc-700 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"
+                              )}
+                            >
+                              {len}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="p-6 border border-zinc-800 rounded-3xl bg-zinc-900/30 backdrop-blur-sm space-y-6">
+                        <div className="flex p-1 bg-zinc-950 rounded-xl border border-zinc-800 w-full">
+                          {(['chatgpt', 'gemini', 'framer', 'generic'] as const).map((tab) => (
+                            <button
+                              key={tab}
+                              onClick={() => setActivePromptTab(tab)}
+                              className={cn(
+                                "flex-1 px-4 py-2 rounded-lg text-xs font-bold transition-all capitalize tracking-wide",
+                                activePromptTab === tab ? "bg-emerald-500 text-black shadow-lg" : "text-zinc-500 hover:text-zinc-300"
+                              )}
+                            >
+                              {tab === 'chatgpt' ? 'ChatGPT' : tab === 'gemini' ? 'Gemini' : tab === 'framer' ? 'Framer AI' : 'Generic'}
+                            </button>
+                          ))}
+                        </div>
+
+                        <motion.div
+                          key={`${activePromptTab}-${promptLength}`}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="space-y-4"
+                        >
+                          <div className="flex items-center justify-between px-2">
+                            <span className="text-[10px] text-zinc-500 font-medium italic">
+                              {activePromptTab === 'chatgpt' && "Optimized for React and Framer Motion logic."}
+                              {activePromptTab === 'gemini' && "Focuses on technical properties and spatial reasoning."}
+                              {activePromptTab === 'framer' && "Tailored for Framer components and layout engine."}
+                              {activePromptTab === 'generic' && "A tool-agnostic description of the motion and logic."}
+                            </span>
+                          </div>
+                          <CodeBlock code={getPrompt(activePromptTab, promptLength)} language="AI Prompt" />
+                        </motion.div>
+                      </div>
+                    </section>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -498,16 +476,13 @@ export default function App() {
         </div>
       </main>
 
-      {/* Footer */}
       <footer className="max-w-7xl mx-auto px-6 py-12 border-t border-zinc-900 mt-20">
         <div className="flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-2 opacity-50">
             <Zap size={16} />
             <span className="text-sm font-bold">MotionReverse AI</span>
           </div>
-          <p className="text-sm text-zinc-600">
-            Built for designers and developers who value motion precision.
-          </p>
+          <p className="text-sm text-zinc-600">Built for designers and developers who value motion precision.</p>
           <div className="flex gap-8">
             <a href="#" className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">Privacy</a>
             <a href="#" className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">Terms</a>
