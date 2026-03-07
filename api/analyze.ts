@@ -10,6 +10,17 @@ export default async function handler(req, res) {
 
     const { frames } = req.body;
 
+    console.log("Frames received:", frames?.length);
+
+    if (!frames || frames.length === 0) {
+      return res.status(400).json({
+        error: "No frames received from client",
+      });
+    }
+
+    // Limit frames to avoid Vercel payload limits
+    const limitedFrames = frames.slice(0, 5);
+
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
     const model = genAI.getGenerativeModel({
@@ -19,12 +30,29 @@ export default async function handler(req, res) {
     const prompt = `
 You are an expert UI animation engineer.
 
-Analyze the animation frames and return structured JSON describing the animation.
+I provided several frames from a UI animation video.
 
-Return ONLY JSON.
+Analyze them and return structured JSON containing:
+
+1. Animation summary
+2. Initial state
+3. Mid motion
+4. Final state
+5. Animation properties (translate, scale, opacity etc.)
+6. Step-by-step explanation
+7. Tracked UI elements and their motion
+8. Production ready animation code:
+   - CSS keyframes
+   - Framer Motion React component
+   - GSAP animation
+9. AI prompts to recreate the animation for:
+   - ChatGPT
+   - Gemini
+   - Framer AI
+   - Generic AI
+
+Return ONLY valid JSON.
 `;
-
-    const limitedFrames = frames.slice(0, 5);
 
     const result = await model.generateContent({
       contents: [
@@ -32,6 +60,7 @@ Return ONLY JSON.
           role: "user",
           parts: [
             { text: prompt },
+
             ...limitedFrames.map((frame) => ({
               inlineData: {
                 mimeType: "image/jpeg",
@@ -45,10 +74,13 @@ Return ONLY JSON.
 
     const text = result.response.text();
 
+    console.log("Gemini response:", text);
+
+    // Extract JSON safely
     const jsonMatch = text.match(/\{[\s\S]*\}/);
 
     if (!jsonMatch) {
-      throw new Error("Invalid JSON response from Gemini");
+      throw new Error("Gemini did not return valid JSON");
     }
 
     const parsed = JSON.parse(jsonMatch[0]);
@@ -61,6 +93,7 @@ Return ONLY JSON.
 
     res.status(500).json({
       error: "Gemini request failed",
+      details: error.message,
     });
   }
 }
