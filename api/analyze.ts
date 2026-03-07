@@ -37,23 +37,30 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ error: "No frames received" });
     }
 
-    const imageData = frames[0];
-    const base64 = imageData.includes(",") ? imageData.split(",")[1] : imageData;
-    const dataUrl = `data:image/jpeg;base64,${base64}`;
+    // Send all 10 frames for maximum accuracy
+    const frameImages = frames.slice(0, 10).map((imageData: string) => {
+      const base64 = imageData.includes(",") ? imageData.split(",")[1] : imageData;
+      return {
+        type: "image_url",
+        image_url: { url: `data:image/jpeg;base64,${base64}` }
+      };
+    });
 
-    const prompt = `You are an expert UI animation engineer. Analyze these animation frames and return ONLY a raw JSON object with this exact structure (no markdown, no code fences):
+    console.log("Sending frames to model:", frameImages.length);
+
+    const prompt = `You are an expert UI animation engineer. I am giving you ${frameImages.length} sequential frames from an animation recording, ordered from start to finish. Analyze the full motion sequence and return ONLY a raw JSON object with this exact structure (no markdown, no code fences):
 
 {
   "summary": "Brief description of the overall animation",
-  "initialState": "Description of the element at start",
-  "midMotion": "Description during animation",
-  "finalState": "Description at the end",
+  "initialState": "Description of the element at the start frame",
+  "midMotion": "Description during the animation",
+  "finalState": "Description at the final frame",
   "properties": ["property1", "property2"],
   "trackedElements": [
     {
       "name": "Element name",
       "properties": ["opacity", "transform"],
-      "motionPath": "Description of how this element moves"
+      "motionPath": "Description of how this element moves across the frames"
     }
   ],
   "stepByStep": [
@@ -112,7 +119,7 @@ export default async function handler(req: any, res: any) {
                 role: "user",
                 content: [
                   { type: "text", text: prompt },
-                  { type: "image_url", image_url: { url: dataUrl } },
+                  ...frameImages,
                 ],
               },
             ],
