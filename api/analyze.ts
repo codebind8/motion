@@ -1,5 +1,3 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-
 export default async function handler(req: any, res: any) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -10,11 +8,10 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-
+  const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
-    console.error("GEMINI_API_KEY is not set");
-    return res.status(500).json({ error: "GEMINI_API_KEY is not configured" });
+    console.error("OPENROUTER_API_KEY is not set");
+    return res.status(500).json({ error: "OPENROUTER_API_KEY is not configured in Vercel environment variables" });
   }
 
   try {
@@ -32,7 +29,9 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ error: "No frames received" });
     }
 
-    const genAI = new GoogleGenerativeAI(apiKey);
+    const imageData = frames[0];
+    const base64 = imageData.includes(",") ? imageData.split(",")[1] : imageData;
+    const dataUrl = `data:image/jpeg;base64,${base64}`;
 
     const prompt = `You are an expert UI animation engineer.
 Analyze these animation frames and return JSON describing:
@@ -48,59 +47,77 @@ Analyze these animation frames and return JSON describing:
 }
 IMPORTANT: Return ONLY raw JSON. No markdown, no code fences, no explanation.`;
 
-    const imageData = frames[0];
-    const base64 = imageData.includes(",") ? imageData.split(",")[1] : imageData;
-
-    const parts = [
-      { text: prompt },
-      { inlineData: { mimeType: "image/jpeg", data: base64 } },
+    // Free vision models on OpenRouter — tries each until one works
+    const models = [
+      "google/gemini-2.0-flash-exp:free",
+      "meta-llama/llama-3.2-90b-vision-instruct:free",
+      "google/gemini-flash-1.5-8b:free",
     ];
 
-    // Updated model list — correct names as of 2025
-    const modelNames = [
-      "gemini-2.0-flash",
-      "gemini-2.0-flash-lite",
-      "gemini-1.5-flash",
-      "gemini-1.5-pro",
-    ];
-
-    let result: any = null;
+    let responseText: string | null = null;
     const errors: string[] = [];
 
-    for (const modelName of modelNames) {
+    for (const model of models) {
       try {
-        console.log("Trying model:", modelName);
-        const model = genAI.getGenerativeModel({ model: modelName });
-        result = await model.generateContent({
-          contents: [{ role: "user", parts }],
+        console.log("Trying model:", model);
+
+        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://motion-six-phi.vercel.app",
+            "X-Title": "MotionReverse AI",
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              {
+                role: "user",
+                content: [
+                  { type: "text", text: prompt },
+                  { type: "image_url", image_url: { url: dataUrl } },
+                ],
+              },
+            ],
+          }),
         });
-        console.log("Success with model:", modelName);
+
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(`HTTP ${response.status}: ${errText}`);
+        }
+
+        const data = await response.json();
+        responseText = data.choices?.[0]?.message?.content ?? null;
+
+        if (!responseText) throw new Error("Empty response from model");
+
+        console.log("Success with model:", model);
         break;
       } catch (e: any) {
-        const msg = e?.message ?? "unknown";
-        console.error(`Model ${modelName} failed: ${msg}`);
-        errors.push(`${modelName}: ${msg}`);
+        console.error(`Model ${model} failed:`, e?.message);
+        errors.push(`${model}: ${e?.message}`);
       }
     }
 
-    if (!result) {
-      // Log all failures so we can diagnose
-      console.error("All models failed:", JSON.stringify(errors));
-      return res.status(500).json({
-        error: "All Gemini models failed",
-        details: errors,
-      });
+    if (!responseText) {
+      console.error("All models failed:", errors);
+      return res.status(500).json({ error: "All models failed", details: errors });
     }
 
-    const text = result.response.text();
-    console.log("Response preview:", text.slice(0, 200));
+    console.log("Response preview:", responseText.slice(0, 200));
 
-    const cleaned = text.replace(/```json\s*/gi, "").replace(/```\s*/gi, "").trim();
+    const cleaned = responseText
+      .replace(/```json\s*/gi, "")
+      .replace(/```\s*/gi, "")
+      .trim();
+
     const start = cleaned.indexOf("{");
     const end = cleaned.lastIndexOf("}");
 
     if (start === -1 || end === -1) {
-      throw new Error("Gemini did not return valid JSON: " + text.slice(0, 100));
+      throw new Error("Model did not return valid JSON: " + responseText.slice(0, 100));
     }
 
     const parsed = JSON.parse(cleaned.slice(start, end + 1));
@@ -109,7 +126,7 @@ IMPORTANT: Return ONLY raw JSON. No markdown, no code fences, no explanation.`;
   } catch (error: any) {
     console.error("Handler error:", error?.message);
     return res.status(500).json({
-      error: "Gemini request failed",
+      error: "Request failed",
       details: error?.message ?? "Unknown error",
     });
   }
