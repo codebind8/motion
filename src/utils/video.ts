@@ -1,5 +1,6 @@
 /**
  * Extracts frames from a video file at specified intervals.
+ * Frames are resized to max 512px wide and compressed to reduce payload size.
  */
 export async function extractFrames(videoFile: File, frameCount: number = 8): Promise<string[]> {
   return new Promise((resolve, reject) => {
@@ -13,9 +14,12 @@ export async function extractFrames(videoFile: File, frameCount: number = 8): Pr
     video.playsInline = true;
 
     video.onloadedmetadata = () => {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      
+      // Resize to max 512px wide to keep payload small
+      const MAX_WIDTH = 512;
+      const scale = Math.min(1, MAX_WIDTH / video.videoWidth);
+      canvas.width = Math.round(video.videoWidth * scale);
+      canvas.height = Math.round(video.videoHeight * scale);
+
       const duration = video.duration;
       const interval = duration / (frameCount + 1);
       let currentFrame = 0;
@@ -26,7 +30,6 @@ export async function extractFrames(videoFile: File, frameCount: number = 8): Pr
           resolve(frames);
           return;
         }
-
         const time = (currentFrame + 1) * interval;
         video.currentTime = time;
       };
@@ -34,7 +37,8 @@ export async function extractFrames(videoFile: File, frameCount: number = 8): Pr
       video.onseeked = () => {
         if (ctx) {
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          frames.push(canvas.toDataURL('image/jpeg', 0.7));
+          // Quality 0.5 = ~10KB per frame instead of ~80KB
+          frames.push(canvas.toDataURL('image/jpeg', 0.5));
           currentFrame++;
           captureFrame();
         }
@@ -43,7 +47,7 @@ export async function extractFrames(videoFile: File, frameCount: number = 8): Pr
       captureFrame();
     };
 
-    video.onerror = (e) => {
+    video.onerror = () => {
       reject(new Error("Failed to load video"));
     };
   });
